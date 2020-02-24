@@ -25,6 +25,29 @@ load("//internal:ts_config.bzl", "TsConfigInfo")
 _DEFAULT_COMPILER = "@npm//@bazel/typescript/bin:tsc_wrapped"
 _DEFAULT_NODE_MODULES = Label("@npm//typescript:typescript__typings")
 
+TypeScriptModule = provider(
+    doc = """
+      This allows typescript files to be read out non compiled this is a bad idea,
+      but I couldn't get this to work with webpack with out using this.
+    """,
+    fields = {
+        "sources": "Depset of direct and transitive TypeScript files and sourcemaps",
+    },
+)
+
+def ts_module(sources, deps = []):
+    """Constructs a TypeScriptModule including all transitive sources from TypeScriptModule providers in a list of deps.
+
+Returns a single TypeScriptModule.
+"""
+    transitive_depsets = [sources]
+    for dep in deps:
+        if TypeScriptModule in dep:
+            transitive_depsets.append(dep[TypeScriptModule].sources)
+
+    return TypeScriptModule(
+        sources = depset(sources, transitive = transitive_depsets),
+    )
 def _trim_package_node_modules(package_name):
     # trim a package name down to its path prior to a node_modules
     # segment. 'foo/node_modules/bar' would become 'foo' and
@@ -280,6 +303,10 @@ def _ts_library_impl(ctx):
         ),
         js_ecma_script_module_info(
             sources = ts_providers["typescript"]["es6_sources"],
+            deps = ctx.attr.deps,
+        ),
+        ts_module(
+            sources = ctx.attr.srcs,
             deps = ctx.attr.deps,
         ),
         # TODO: Add remaining shared JS provider from design doc
